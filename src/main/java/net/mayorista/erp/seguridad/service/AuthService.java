@@ -23,28 +23,28 @@ public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
-    private final PasswordEncoder passwordEncoder; // <--- Para encriptar
+    private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
 
-    // 1. MÉTODO DE REGISTRO (Guarda en BCrypt)
+
     public String registrar(RegisterRequest request) {
-        // Verificar si ya existe
+
         if (usuarioRepository.findByUsername(request.getUsername()).isPresent()) {
             throw new RuntimeException("El usuario ya existe");
         }
 
-        // Crear el usuario
+
         Usuario usuario = new Usuario();
         usuario.setUsername(request.getUsername());
-        // ENCRIPTAMOS LA CONTRASEÑA AQUÍ:
+
         usuario.setPassword(passwordEncoder.encode(request.getPassword()));
         usuario.setNombres(request.getNombres());
         usuario.setApellidos(request.getApellidos());
         usuario.setEmail(request.getEmail());
         usuario.setEstado(true);
 
-        // Asignarle el rol de ADMIN por defecto (o el que quieras)
+
         Rol rolAdmin = rolRepository.findByNombre("ADMIN")
                 .orElseGet(() -> {
                     Rol nuevoRol = new Rol();
@@ -57,9 +57,9 @@ public class AuthService {
         return "Usuario registrado exitosamente";
     }
 
-    // 2. MÉTODO DE LOGIN (Usa JWT)
+
     public LoginResponse login(LoginRequest request) {
-        // Spring Security verifica usuario y contraseña automáticamente
+
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );

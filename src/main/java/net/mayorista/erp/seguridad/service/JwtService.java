@@ -17,7 +17,7 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    // Lee la clave y el tiempo de expiración desde application.properties
+
     @Value("${erp.jwt.secret}")
     private String secretKey;
 

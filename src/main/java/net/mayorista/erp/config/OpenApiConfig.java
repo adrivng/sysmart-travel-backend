@@ -20,7 +20,7 @@ public class OpenApiConfig {
                         .title("ERP Mayorista de Viajes API")
                         .version("1.0")
                         .description("Documentación de los endpoints del ERP"))
-                // Esto le dice a Swagger que use el token JWT globalmente
+
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName,
