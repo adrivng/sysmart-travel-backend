@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Turístico - Panel</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark">E</span>
+        <strong>ERP Turístico</strong>
+    </div>
+    <div class="topbar-right">
+        <a class="btn btn-ghost" href="/maestros.html">Maestros</a>
+        <span id="usuario-info" class="usuario-info"></span>
+        <a class="btn btn-ghost" href="/swagger-ui.html" target="_blank" rel="noopener">API Docs</a>
+        <button class="btn btn-ghost" id="btn-logout">Salir</button>
+    </div>
+</header>
+
+<main class="contenedor">
+
+    <section class="hero">
+        <h1>Panel de administración</h1>
+        <p>Backend REST para la operación de una agencia de viajes.</p>
+    </section>
+
+    <section class="stats">
+        <article class="card-stat">
+            <span id="stat-usuarios">-</span>
+            <small>Usuarios</small>
+        </article>
+        <article class="card-stat">
+            <span>5</span>
+            <small>Módulos del ERP</small>
+        </article>
+        <article class="card-stat">
+            <span>JWT</span>
+            <small>Autenticación</small>
+        </article>
+        <article class="card-stat">
+            <span>v1</span>
+            <small>API REST</small>
+        </article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-header">
+            <div>
+                <h2>Usuarios</h2>
+                <p class="muted">Seguridad del sistema: usuarios y roles.</p>
+            </div>
+            <button id="btn-nuevo" class="btn btn-primary">Nuevo usuario</button>
+        </div>
+
+        <form id="form-usuario" class="form-grid oculto" novalidate>
+            <input type="hidden" id="usuario-id">
+
+            <div>
+                <label for="f-username">Usuario</label>
+                <input id="f-username" required maxlength="50">
+            </div>
+            <div>
+                <label for="f-password">Contraseña</label>
+                <input id="f-password" type="password" placeholder="Opcional al editar">
+            </div>
+            <div>
+                <label for="f-nombre">Nombre</label>
+                <input id="f-nombre" required maxlength="100">
+            </div>
+            <div>
+                <label for="f-apellido">Apellido</label>
+                <input id="f-apellido" required maxlength="100">
+            </div>
+            <div>
+                <label for="f-email">Correo</label>
+                <input id="f-email" type="email" required maxlength="150">
+            </div>
+            <div>
+                <label for="f-celular">Celular</label>
+                <input id="f-celular" maxlength="30">
+            </div>
+            <div>
+                <label for="f-cargo">Cargo</label>
+                <input id="f-cargo" maxlength="100">
+            </div>
+            <div>
+                <label for="f-rol">Rol</label>
+                <select id="f-rol" required>
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="VENDEDOR">VENDEDOR</option>
+                    <option value="OPERADOR">OPERADOR</option>
+                </select>
+            </div>
+
+            <label class="check">
+                <input type="checkbox" id="f-estado" checked> Activo
+            </label>
+
+            <div class="acciones-form">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <button type="button" class="btn btn-ghost" id="btn-cancelar">Cancelar</button>
+            </div>
+
+            <p id="form-mensaje" class="mensaje"></p>
+        </form>
+
+        <div class="tabla-wrapper">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Usuario</th>
+                    <th>Nombre</th>
+                    <th>Correo</th>
+                    <th>Rol</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody id="tabla-usuarios">
+                <tr>
+                    <td colspan="7" class="muted">Cargando...</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

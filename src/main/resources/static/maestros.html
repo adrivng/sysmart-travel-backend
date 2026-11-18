@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Turístico - Maestros</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark">E</span>
+        <strong>ERP Turístico</strong>
+    </div>
+    <div class="topbar-right">
+        <a class="btn btn-ghost" href="/app.html">Usuarios</a>
+        <span id="usuario-info" class="usuario-info"></span>
+        <a class="btn btn-ghost" href="/swagger-ui.html" target="_blank" rel="noopener">API Docs</a>
+        <button class="btn btn-ghost" id="btn-logout">Salir</button>
+    </div>
+</header>
+
+<main class="contenedor">
+
+    <section class="hero">
+        <h1>Maestros</h1>
+        <p>Datos base del ERP: ubigeo, operadores y hoteles.</p>
+    </section>
+
+    <!-- ================= OPERADORES ================= -->
+    <section class="panel" style="margin-bottom: 24px;">
+        <div class="panel-header">
+            <div>
+                <h2>Operadores</h2>
+                <p class="muted">Proveedores de servicios turísticos.</p>
+            </div>
+            <button id="btn-nuevo-operador" class="btn btn-primary">Nuevo operador</button>
+        </div>
+
+        <form id="form-operador" class="form-grid oculto" novalidate>
+            <input type="hidden" id="operador-id">
+
+            <div>
+                <label for="op-nombre">Nombre</label>
+                <input id="op-nombre" required maxlength="100">
+            </div>
+            <div>
+                <label for="op-telefono">Teléfono</label>
+                <input id="op-telefono" maxlength="50">
+            </div>
+            <div>
+                <label for="op-correo">Correo</label>
+                <input id="op-correo" type="email" maxlength="255">
+            </div>
+            <div>
+                <label for="op-direccion">Dirección</label>
+                <input id="op-direccion" maxlength="255">
+            </div>
+            <div>
+                <label for="op-observacion">Observación</label>
+                <input id="op-observacion" maxlength="500">
+            </div>
+
+            <label class="check">
+                <input type="checkbox" id="op-mayorista"> Mayorista
+            </label>
+            <label class="check">
+                <input type="checkbox" id="op-activo" checked> Activo
+            </label>
+
+            <div class="acciones-form">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <button type="button" class="btn btn-ghost" id="btn-cancelar-operador">Cancelar</button>
+            </div>
+
+            <p id="operador-mensaje" class="mensaje"></p>
+        </form>
+
+        <div class="filtro">
+            <input id="buscar-operador" placeholder="Buscar operador por nombre...">
+        </div>
+
+        <div class="tabla-wrapper">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Teléfono</th>
+                    <th>Correo</th>
+                    <th>Tipo</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody id="tabla-operadores">
+                <tr><td colspan="7" class="muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ================= HOTELES ================= -->
+    <section class="panel" style="margin-bottom: 24px;">
+        <div class="panel-header">
+            <div>
+                <h2>Hoteles</h2>
+                <p class="muted">Alojamientos asociados a un operador.</p>
+            </div>
+            <button id="btn-nuevo-hotel" class="btn btn-primary">Nuevo hotel</button>
+        </div>
+
+        <form id="form-hotel" class="form-grid oculto" novalidate>
+            <input type="hidden" id="hotel-id">
+
+            <div>
+                <label for="ho-nombre">Nombre</label>
+                <input id="ho-nombre" required maxlength="255">
+            </div>
+            <div>
+                <label for="ho-direccion">Dirección</label>
+                <input id="ho-direccion" maxlength="255">
+            </div>
+            <div>
+                <label for="ho-telefono">Teléfono</label>
+                <input id="ho-telefono" maxlength="255">
+            </div>
+            <div>
+                <label for="ho-operador">Operador</label>
+                <select id="ho-operador">
+                    <option value="">Sin operador</option>
+                </select>
+            </div>
+
+            <label class="check">
+                <input type="checkbox" id="ho-activo" checked> Activo
+            </label>
+
+            <div class="acciones-form">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <button type="button" class="btn btn-ghost" id="btn-cancelar-hotel">Cancelar</button>
+            </div>
+
+            <p id="hotel-mensaje" class="mensaje"></p>
+        </form>
+
+        <div class="filtro">
+            <input id="buscar-hotel" placeholder="Buscar hotel por nombre...">
+        </div>
+
+        <div class="tabla-wrapper">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Dirección</th>
+                    <th>Teléfono</th>
+                    <th>Operador</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody id="tabla-hoteles">
+                <tr><td colspan="7" class="muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ================= UBIGEO ================= -->
+    <section class="panel">
+        <div class="panel-header">
+            <div>
+                <h2>Ubigeo</h2>
+                <p class="muted">Departamento → provincia → distrito (INEI).</p>
+            </div>
+        </div>
+
+        <div class="selector-row">
+            <div>
+                <label for="sel-departamento">Departamento</label>
+                <select id="sel-departamento">
+                    <option value="">Selecciona un departamento</option>
+                </select>
+            </div>
+            <div>
+                <label for="sel-provincia">Provincia</label>
+                <select id="sel-provincia" disabled>
+                    <option value="">Selecciona una provincia</option>
+                </select>
+            </div>
+            <div>
+                <label for="sel-distrito">Distrito</label>
+                <select id="sel-distrito" disabled>
+                    <option value="">Selecciona un distrito</option>
+                </select>
+            </div>
+        </div>
+
+        <p id="ubigeo-info" class="muted">Selecciona un departamento para comenzar.</p>
+    </section>
+</main>
+
+<script src="/js/maestros.js"></script>
+</body>
+</html>
