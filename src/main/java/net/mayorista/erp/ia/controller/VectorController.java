@@ -15,7 +15,7 @@ public class VectorController {
 
     @PostMapping("/indexar")
     public ResponseEntity<String> indexar() {
-        return ResponseEntity.ok(vectorSqlService.indexarPromociones());
+        return ResponseEntity.ok(vectorSqlService.indexarContenido());
     }
 
     @PostMapping("/buscar")

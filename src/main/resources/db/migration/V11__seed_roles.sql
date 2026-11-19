@@ -1,0 +1,3 @@
+INSERT INTO roles (nombre)
+VALUES ('VENDEDOR'), ('OPERADOR')
+ON CONFLICT (nombre) DO NOTHING;

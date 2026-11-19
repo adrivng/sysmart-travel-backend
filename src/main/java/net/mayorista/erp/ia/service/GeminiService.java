@@ -3,8 +3,6 @@ package net.mayorista.erp.ia.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import net.mayorista.erp.productos.paquete.model.Paquete;
-import net.mayorista.erp.productos.paquete.repository.PaqueteRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -17,7 +15,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GeminiService {
 
-    private final PaqueteRepository paqueteRepository;
     private final VectorSqlService vectorSqlService;
 
     @Value("${gemini.api.key}")
@@ -55,37 +52,20 @@ public class GeminiService {
     }
 
     private String construirPrompt(String pregunta) {
+        String contextoRecuperado = vectorSqlService.buscarContexto(pregunta);
+
         StringBuilder contexto = new StringBuilder(
-                "Eres un asistente de viajes de SysMart. Responde de forma clara y basándote solo en la información proporcionada.\n\n");
+                "Eres un asistente de viajes de SysMart. Responde de forma clara, útil y basándote solo en la información proporcionada.\n\n");
+        contexto.append("INFORMACIÓN RELEVANTE (recuperada por similitud vectorial):\n");
 
-        contexto.append(construirContextoPaquetes());
-
-        String promociones = vectorSqlService.buscarContexto(pregunta);
-        contexto.append("\nPROMOCIONES RELEVANTES (recuperadas por similitud vectorial):\n");
-        if (promociones.isBlank()) {
-            contexto.append("No hay promociones indexadas en este momento.\n");
+        if (contextoRecuperado == null || contextoRecuperado.isBlank()) {
+            contexto.append("No hay información indexada en este momento.\n");
         } else {
-            contexto.append(promociones).append("\n");
+            contexto.append(contextoRecuperado).append("\n");
         }
 
-        return contexto + "\nPregunta del cliente: " + pregunta
+        return contexto
+                + "\nPregunta del cliente: " + pregunta
                 + "\nSi la información no está en el contexto, indícalo claramente en lugar de inventar datos.";
-    }
-
-    private String construirContextoPaquetes() {
-        List<Paquete> paquetes = paqueteRepository.findAll();
-        if (paquetes.isEmpty()) {
-            return "PAQUETES: No hay paquetes registrados.\n";
-        }
-
-        StringBuilder texto = new StringBuilder("PAQUETES DISPONIBLES:\n");
-        for (Paquete paquete : paquetes) {
-            texto.append("- ").append(paquete.getNombre())
-                    .append(" | Destino: ").append(paquete.getDestino().getNombre())
-                    .append(" | Precio Soles: ").append(paquete.getPrecioSoles())
-                    .append(" | Incluye: ").append(paquete.getIncluye())
-                    .append("\n");
-        }
-        return texto.toString();
     }
 }

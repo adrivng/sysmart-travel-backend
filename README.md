@@ -1,6 +1,6 @@
 # SysMart Travel - Backend API
 
-API REST para un ERP B2B destinado a agencias mayoristas de viajes. Centraliza la gestión de agencias minoristas, operadores, catálogo de paquetes, promociones, cotizaciones y provee un asistente conversacional basado en modelos de lenguaje y búsqueda vectorial.
+API REST para un ERP B2B destinado a agencias mayoristas de viajes. Centraliza la gestión de agencias minoristas, operadores, catálogo de paquetes, promociones y cotizaciones, y provee un asistente conversacional basado en recuperación vectorial (RAG) con Google Gemini.
 
 El repositorio contiene exclusivamente el backend. El frontend (React + TypeScript) se desarrolla en un proyecto independiente.
 
@@ -12,15 +12,16 @@ El repositorio contiene exclusivamente el backend. El frontend (React + TypeScri
 | :--- | :--- | :--- |
 | Lenguaje | Java | 21 (LTS) |
 | Framework | Spring Boot | 4.1.2 |
-| Web | Spring MVC (starter-webmvc) | Incluido en Boot 4 |
-| Persistencia | Spring Data JPA / Hibernate | Mapeo ORM y repositorios |
+| Web | Spring MVC (`spring-boot-starter-webmvc`) | Incluido en Boot 4 |
+| Persistencia | Spring Data JPA / Hibernate | ORM y repositorios |
 | Base de datos | PostgreSQL (Neon Serverless) | Driver oficial en scope runtime |
-| Migraciones | Flyway | V1 a V9 en `db/migration` |
-| Seguridad | Spring Security + JJWT | 0.12.7, tokens HS256 stateless |
-| Validación | Bean Validation (Jakarta) | Anotaciones en DTOs de entrada |
+| Migraciones | Flyway | V1 a V11 en `db/migration` |
+| Seguridad | Spring Security + JJWT | 0.12.7, JWT HS256 stateless, RBAC |
+| Validación | Bean Validation (Jakarta) | Validación de DTOs de entrada |
 | Documentación | SpringDoc OpenAPI | 3.2.0, Swagger UI |
+| Observabilidad | Spring Boot Actuator | Health check (`/actuator/health`) |
 | Búsqueda vectorial | pgvector (extensión de PostgreSQL) | `vector(768)`, operador `<->` |
-| IA | Google Gemini API | `gemini-3.1-flash-lite` y `text-embedding-004` |
+| IA | Google Gemini API | `gemini-3.1-flash-lite` (chat) y `gemini-embedding-001` (embeddings) |
 | Utilidades | Lombok | Reducción de código boilerplate |
 | Build | Maven Wrapper (`mvnw`) | Sin instalación previa de Maven |
 
@@ -28,41 +29,34 @@ El repositorio contiene exclusivamente el backend. El frontend (React + TypeScri
 
 ## Arquitectura
 
-Diseño desacoplado backend/frontend y patrón MVC dentro del servicio. La organización de paquetes es *feature-based*: cada dominio de negocio agrupa su controlador, DTOs, modelo, repositorio y servicio.
+Diseño desacoplado backend/frontend y patrón MVC. La organización de paquetes es *feature-based*: cada dominio agrupa controlador, DTOs, modelo, repositorio y servicio.
 
 ```text
-[ React / TypeScript ]  --HTTP/JSON-->  [ API REST Spring Boot ]
-                                             |        |
-                                     JPA/Hibernate   JdbcTemplate
-                                             |        |
-                                      [ PostgreSQL ] [pgvector]
-                                             |
-                                      [ Google Gemini API ]
+[ React / TypeScript ]  --HTTP/JSON + JWT-->  [ API REST Spring Boot ]
+                                                    |        |
+                                            JPA/Hibernate   JdbcTemplate
+                                                    |        |
+                                             [ PostgreSQL ] [ pgvector ]
+                                                    |
+                                             [ Google Gemini API ]
 ```
 
 Estructura de paquetes:
 
 ```text
 net.mayorista.erp
-├── configuracion        # SecurityConfig, OpenApiConfig
+├── config               # SecurityConfig, OpenApiConfig
 ├── seguridad            # Autenticación, JWT, usuarios y roles
-│   ├── controller
-│   ├── dto
-│   ├── model
-│   ├── repository
-│   └── service
 ├── maestros
 │   ├── agencia
 │   ├── operador
 │   ├── moneda
 │   ├── destino
-│   └── promocion
+│   └── promocion        # Incluye migración desde endpoint PHP legacy
 ├── productos.paquete
 ├── ventas.cotizacion
-└── ia                   # Chat con Gemini e indexación vectorial
+└── ia                   # Embeddings, indexación vectorial y chat RAG
 ```
-
-Cada feature sigue el flujo `Controller -> Service -> Repository`, con DTOs separados para peticiones y respuestas.
 
 ---
 
@@ -70,51 +64,94 @@ Cada feature sigue el flujo `Controller -> Service -> Repository`, con DTOs sepa
 
 | Dominio | Responsabilidad |
 | :--- | :--- |
-| Seguridad | Registro, login, emisión y validación de JWT, modelo de usuarios y roles |
-| Agencias | Alta y consulta de agencias minoristas clientes |
+| Seguridad | Registro, login, emisión/validación de JWT, usuarios y roles (`ADMIN`, `OPERADOR`, `VENDEDOR`) |
+| Agencias | Gestión de agencias minoristas clientes |
 | Operadores | Gestión de proveedores/operadores turísticos |
 | Monedas | Catálogo multimoneda |
 | Destinos | Catálogo de destinos |
-| Promociones | Promociones vigentes y migración desde el sistema PHP legacy |
-| Paquetes | Catálogo de paquetes con destino, precio e inclusiones |
-| Cotizaciones | Armado y consulta de cotizaciones |
-| IA | Generación de respuestas con Gemini e indexación de promociones en pgvector |
+| Promociones | Promociones vigentes e importación desde el endpoint PHP legacy |
+| Paquetes | Catálogo de paquetes con destino, duración, precios e inclusiones |
+| Cotizaciones | Gestión de cotizaciones |
+| IA | Indexación vectorial de promociones y paquetes, búsqueda por similitud y chat con contexto RAG |
+
+---
+
+## Seguridad y control de acceso
+
+- Autenticación stateless con JWT firmado mediante JJWT (HMAC).
+- Contraseñas almacenadas con BCrypt.
+- `JwtAuthenticationFilter` activo en la cadena de filtros.
+- Autorización por rol en los endpoints (`ROLE_ADMIN`, `ROLE_OPERADOR`, `ROLE_VENDEDOR`).
+- Swagger UI configurado con esquema `bearerAuth` para probar endpoints protegidos.
+
+### Matriz de acceso
+
+| Alcance | Reglas |
+| :--- | :--- |
+| Público | `/api/auth/**`, `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`, `/actuator/health/**` |
+| `ADMIN`, `OPERADOR` | `POST /api/ia/vectores/indexar`, `POST /api/maestros/promociones/migrar-desde-php`, `POST /api/maestros/**`, `POST /api/productos/**` |
+| `ADMIN`, `VENDEDOR` | `POST /api/ventas/**` |
+| Cualquier usuario autenticado | `GET /api/**`, `POST /api/ia/chat`, `POST /api/ia/vectores/buscar` |
+| `ADMIN` | Cualquier otra operación sobre `/api/**` |
+
+El registro público (`POST /api/auth/register`) crea usuarios con rol `VENDEDOR`. La base de datos inicializa los roles `ADMIN`, `VENDEDOR` y `OPERADOR` mediante migraciones Flyway.
 
 ---
 
 ## Endpoints
 
-| Método | Ruta | Descripción |
-| :--- | :--- | :--- |
-| POST | `/api/auth/register` | Registro de usuario |
-| POST | `/api/auth/login` | Autenticación y obtención de token JWT |
-| GET | `/api/maestros/agencias` | Listado de agencias |
-| POST | `/api/maestros/agencias` | Alta de agencia |
-| GET | `/api/maestros/operadores` | Listado de operadores |
-| POST | `/api/maestros/operadores` | Alta de operador |
-| GET | `/api/maestros/monedas` | Listado de monedas |
-| POST | `/api/maestros/monedas` | Alta de moneda |
-| GET | `/api/maestros/destinos` | Listado de destinos |
-| POST | `/api/maestros/destinos` | Alta de destino |
-| POST | `/api/maestros/promociones/migrar-desde-php` | Importación de promociones legacy |
-| GET | `/api/productos/paquetes` | Listado de paquetes |
-| POST | `/api/productos/paquetes` | Alta de paquete |
-| GET | `/api/ventas/cotizaciones` | Listado de cotizaciones |
-| POST | `/api/ventas/cotizaciones` | Alta de cotización |
-| POST | `/api/ia/chat` | Consulta en lenguaje natural al asistente con recuperación vectorial |
-| POST | `/api/ia/vectores/indexar` | Indexación de promociones en pgvector |
-| POST | `/api/ia/vectores/buscar` | Recuperación de promociones por similitud vectorial |
+| Método | Ruta | Descripción | Acceso |
+| :--- | :--- | :--- | :--- |
+| POST | `/api/auth/register` | Registro de usuario (rol `VENDEDOR`) | Público |
+| POST | `/api/auth/login` | Autenticación y emisión de token JWT | Público |
+| GET | `/api/maestros/agencias` | Listado de agencias | Autenticado |
+| POST | `/api/maestros/agencias` | Alta de agencia | `ADMIN`, `OPERADOR` |
+| GET | `/api/maestros/operadores` | Listado de operadores | Autenticado |
+| POST | `/api/maestros/operadores` | Alta de operador | `ADMIN`, `OPERADOR` |
+| GET | `/api/maestros/monedas` | Listado de monedas | Autenticado |
+| POST | `/api/maestros/monedas` | Alta de moneda | `ADMIN`, `OPERADOR` |
+| GET | `/api/maestros/destinos` | Listado de destinos | Autenticado |
+| POST | `/api/maestros/destinos` | Alta de destino | `ADMIN`, `OPERADOR` |
+| POST | `/api/maestros/promociones/migrar-desde-php` | Importación de promociones desde endpoint PHP legacy | `ADMIN`, `OPERADOR` |
+| GET | `/api/productos/paquetes` | Listado de paquetes | Autenticado |
+| POST | `/api/productos/paquetes` | Alta de paquete | `ADMIN`, `OPERADOR` |
+| GET | `/api/ventas/cotizaciones` | Listado de cotizaciones | Autenticado |
+| POST | `/api/ventas/cotizaciones` | Alta de cotización | `ADMIN`, `VENDEDOR` |
+| POST | `/api/ia/chat` | Consulta en lenguaje natural con contexto RAG | Autenticado |
+| POST | `/api/ia/vectores/indexar` | Indexación vectorial de promociones y paquetes | `ADMIN`, `OPERADOR` |
+| POST | `/api/ia/vectores/buscar` | Búsqueda de contexto por similitud vectorial | Autenticado |
+| GET | `/actuator/health` | Estado de salud de la aplicación | Público |
 
-Documentación interactiva disponible en `/swagger-ui.html`.
+Documentación interactiva: `/swagger-ui.html`.
+
+---
+
+## Indexación vectorial y RAG
+
+### Flujo
+
+1. `POST /api/ia/vectores/indexar` recopila promociones y paquetes desde la base de datos, construye un documento textual por registro y genera embeddings con `gemini-embedding-001` (`outputDimensionality=768`).
+2. Los embeddings se generan mediante `batchEmbedContents` en lotes de 50 solicitudes por llamada, con reintentos ante respuestas `429` (cuota por minuto del plan gratuito). Las llamadas HTTP a Gemini se realizan fuera de la transacción de base de datos.
+3. Una vez generados y validados todos los vectores, se reemplaza el contenido de `vector_store` en una transacción corta (`TRUNCATE` + inserción por lotes), evitando pérdida del índice anterior si falla la generación.
+4. `POST /api/ia/chat` convierte la pregunta en un embedding, recupera los fragmentos más cercanos con el operador `<->` de pgvector y envía ese contexto a `gemini-3.1-flash-lite` para generar la respuesta.
+5. `POST /api/ia/vectores/buscar` expone la recuperación por similitud de forma independiente para verificación del índice.
+
+La indexación debe ejecutarse después de cargar o modificar promociones/paquetes (por ejemplo, tras `POST /api/maestros/promociones/migrar-desde-php`).
+
+### Correcciones aplicadas al flujo de embeddings
+
+- **Modelo de embeddings:** se migró de `text-embedding-004` (no disponible para la clave utilizada) a `gemini-embedding-001`, solicitando explícitamente `outputDimensionality=768` para mantener compatibilidad con la columna `vector(768)`.
+- **Límite de cuota (429):** el indexado secuencial (una solicitud por documento) excedía el límite de 100 solicitudes/minuto del plan gratuito. Se implementó `batchEmbedContents` en lotes y reintentos con espera ante `429`.
+- **Consistencia transaccional:** la generación de embeddings se separó de la persistencia; el índice solo se reemplaza cuando todos los vectores fueron generados y validados.
+- **Validación:** se verifica la cantidad y dimensionalidad de los embeddings; ante errores de la API no se insertan vectores inválidos.
 
 ---
 
 ## Configuración
 
-La aplicación no almacena credenciales en el código. Lee los valores del entorno mediante placeholders en `application.properties`:
+La aplicación lee la configuración sensible desde el entorno. En local puede cargarse desde un archivo `.env` en la raíz (ignorado por Git) gracias a `spring.config.import=optional:file:.env[.properties]`.
 
 ```properties
-spring.config.import=optional:file:.env[.properties]
 spring.datasource.url=${DATABASE_URL}
 spring.datasource.username=${DATABASE_USERNAME}
 spring.datasource.password=${DATABASE_PASSWORD}
@@ -125,23 +162,20 @@ server.port=${PORT:8080}
 
 | Variable | Descripción |
 | :--- | :--- |
-| `DATABASE_URL` | URL JDBC completa, incluyendo `sslmode=require&stringtype=unspecified` |
-| `DATABASE_USERNAME` | Usuario de PostgreSQL |
-| `DATABASE_PASSWORD` | Contraseña de PostgreSQL |
-| `JWT_SECRET` | Secreto de firma, mínimo 32 bytes; se usa directamente como bytes, sin decodificación Base64 |
-| `GEMINI_API_KEY` | Credencial de Google AI Studio |
-| `PORT` | Puerto HTTP; Render lo inyecta automáticamente, el valor local por defecto es 8080 |
+| `DATABASE_URL` | URL JDBC de PostgreSQL, incluyendo `sslmode=require&stringtype=unspecified` |
+| `DATABASE_USERNAME` | Usuario de la base de datos |
+| `DATABASE_PASSWORD` | Contraseña de la base de datos |
+| `JWT_SECRET` | Secreto de firma JWT (mínimo 32 bytes) |
+| `GEMINI_API_KEY` | Clave de Google AI Studio |
+| `PORT` | Puerto HTTP (Render lo inyecta; por defecto 8080) |
 
-### Decisiones técnicas de configuración
+Decisiones relevantes:
 
-- `spring.jpa.hibernate.ddl-auto=validate`: Flyway es el único propietario del esquema; Hibernate solo verifica que las entidades coincidan con las tablas.
-- `spring.flyway.baseline-on-migrate=true`: permite adoptar bases de datos preexistentes sin reconstruirlas.
-- `stringtype=unspecified` en la URL JDBC: `VectorSqlService` enlaza el embedding como `String` y aplica el cast `?::vector`. Sin este parámetro, el driver PgJDBC envía el valor como `varchar` y PostgreSQL responde `cannot cast type character varying to vector`.
-- Dimensionalidad `768`: coincide entre `text-embedding-004`, la columna `vector(768)` y la validación previa a cada inserción o consulta.
-- La extensión `vector` y la tabla `vector_store` se crean mediante la migración `V10__vector_store.sql`, con sentencias idempotentes.
-- Si la API de embeddings falla, `EmbeddingService` lanza una excepción en lugar de devolver un vector de ceros, evitando indexar datos inválidos.
-
-Para trabajo local se recomienda un archivo `.env` en la raíz (ignorado por Git) con las variables anteriores. Opcionalmente se puede versionar un `.env.example` con las claves sin valores como plantilla.
+- `spring.jpa.hibernate.ddl-auto=validate`: Flyway es la fuente de verdad del esquema.
+- `spring.flyway.baseline-on-migrate=true`: permite adoptar bases existentes.
+- `stringtype=unspecified` en la URL JDBC: necesario para enviar parámetros como `?::vector` mediante PgJDBC.
+- Migración `V10__vector_store.sql`: crea la extensión `vector` y la tabla `vector_store` de forma idempotente.
+- Migración `V11__seed_roles.sql`: asegura la existencia de los roles `VENDEDOR` y `OPERADOR`.
 
 ---
 
@@ -150,9 +184,9 @@ Para trabajo local se recomienda un archivo `.env` en la raíz (ignorado por Git
 ### Requisitos
 
 - JDK 21
-- PostgreSQL local o instancia de Neon
-- API key de Google AI Studio
-- Maven Wrapper incluido en el repositorio
+- PostgreSQL o instancia de Neon
+- Clave de API de Google AI Studio
+- Maven Wrapper incluido (`mvnw` / `mvnw.cmd`)
 
 ### Pasos
 
@@ -161,58 +195,48 @@ git clone https://github.com/adrivng/sysmart-travel-backend.git
 cd sysmart-travel-backend
 ```
 
-1. Crear el archivo `.env` en la raíz con las variables de la tabla anterior.
-2. Alternativamente, cargar las mismas variables en *Run/Debug Configurations* de IntelliJ IDEA.
-3. Ejecutar la aplicación:
+1. Crear un archivo `.env` en la raíz con las variables indicadas.
+2. Iniciar la aplicación:
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-4. Acceder a Swagger UI en `http://localhost:8080/swagger-ui.html`.
+3. Acceder a Swagger UI: `http://localhost:8080/swagger-ui.html`.
+4. Autenticarse con `POST /api/auth/login` (o registrar un usuario) y usar el botón **Authorize** con el token Bearer.
+5. Si es necesario, importar promociones desde el endpoint PHP legacy (`POST /api/maestros/promociones/migrar-desde-php`) y luego ejecutar `POST /api/ia/vectores/indexar`.
 
-Verificación rápida del entorno:
+### Pruebas
 
 ```bash
 ./mvnw test
 ```
 
-La prueba `@SpringBootTest` valida el arranque del contexto, la ejecución de Flyway y la correspondencia entre entidades JPA y el esquema real.
+Las pruebas automatizadas incluyen:
+
+- Validación del contexto de aplicación, migraciones Flyway y correspondencia JPA/esquema (`@SpringBootTest`).
+- Pruebas unitarias de generación y validación de JWT (`JwtServiceTest`).
+- Pruebas de integración de seguridad y disponibilidad: health check público, login público, rechazo de acceso no autenticado a endpoints protegidos (`ApiSecurityIntegrationTest`).
+
+Además, se realizaron pruebas funcionales consumiendo el endpoint PHP legacy de promociones (`POST /api/maestros/promociones/migrar-desde-php`), seguidas de la indexación vectorial y consultas al chat/búsqueda para validar el flujo RAG de extremo a extremo.
 
 ---
 
-## Despliegue
+## Despliegue en Render
 
-El `Dockerfile` define un build multi-stage: compilación con Maven sobre Temurin 21 y ejecución sobre una imagen JRE Alpine. Las variables se inyectan en tiempo de ejecución, por lo que ningún secreto queda grabado en la imagen.
-
-En Render, registrar las variables de la sección de configuración en *Environment*. La plataforma define `PORT`, que la aplicación respeta mediante `${PORT:8080}`.
-
-Flujo RAG vectorial:
-
-1. `POST /api/ia/vectores/indexar` obtiene las promociones, genera un embedding por cada una con `text-embedding-004` y persiste el resultado en `vector_store`. La operación es atómica: primero se generan todos los embeddings y recién después se reemplaza el contenido de la tabla.
-2. `POST /api/ia/chat` convierte la pregunta en un embedding, recupera las tres promociones más cercanas con el operador `<->` de pgvector y usa ese contexto, junto con el catálogo de paquetes, para generar la respuesta con Gemini.
-3. `POST /api/ia/vectores/buscar` expone la recuperación por similitud de forma independiente, útil para verificar el funcionamiento del índice.
-
-La indexación debe ejecutarse una vez después de arrancar y volver a ejecutarse cada vez que cambien las promociones.
+- Build multi-stage definido en `Dockerfile` (Maven + Temurin 21 para compilación, JRE Alpine para ejecución).
+- Las variables de entorno se configuran en *Environment* del servicio de Render; no se incluyen en la imagen ni en el repositorio.
+- La aplicación respeta `PORT` inyectado por la plataforma.
+- Después de cada despliegue, ejecutar `POST /api/ia/vectores/indexar` si el contenido de promociones/paquetes cambió o si el índice debe regenerarse.
 
 ---
 
-## Seguridad
+## Mejoras futuras
 
-- Autenticación stateless con JWT firmado mediante JJWT y clave HMAC.
-- Contraseñas hasheadas con BCrypt.
-- Modelo de roles definido: `ADMIN`, `VENDEDOR` y `OPERADOR`.
-- Validación de entrada con Bean Validation en los DTOs.
-
-Estado actual: `SecurityConfig` mantiene temporalmente `permitAll` y el filtro `JwtAuthenticationFilter` permanece desactivado para facilitar las pruebas de desarrollo. La activación de la autorización por ruta está prevista como siguiente paso.
-
----
-
-## Trabajo pendiente
-
-- Activar `JwtAuthenticationFilter` y aplicar control de acceso por rol en los endpoints.
-- Ampliar la cobertura de pruebas y exponer un endpoint de health check.
-- Extender la indexación vectorial al catálogo de paquetes, que hoy se incorpora desde JPA.
+- Endpoints de actualización y eliminación (PUT/DELETE) con reglas de autorización específicas por recurso.
+- Cobertura de pruebas adicional para controladores y servicios de negocio con datos de prueba aislados.
+- Reindexación automática ante cambios en promociones/paquetes.
+- Métricas y observabilidad extendida mediante Actuator.
 
 ---
 
@@ -220,6 +244,5 @@ Estado actual: `SecurityConfig` mantiene temporalmente `permitAll` y el filtro `
 
 Adrian
 
-GitHub: https://github.com/adrivng
-
-LinkedIn: https://www.linkedin.com/in/adriancarl31/
+- GitHub: https://github.com/adrivng
+- LinkedIn: https://www.linkedin.com/in/adriancarl31/

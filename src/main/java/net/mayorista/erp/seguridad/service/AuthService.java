@@ -34,27 +34,24 @@ public class AuthService {
             throw new RuntimeException("El usuario ya existe");
         }
 
-
         Usuario usuario = new Usuario();
         usuario.setUsername(request.getUsername());
-
         usuario.setPassword(passwordEncoder.encode(request.getPassword()));
         usuario.setNombres(request.getNombres());
         usuario.setApellidos(request.getApellidos());
         usuario.setEmail(request.getEmail());
         usuario.setEstado(true);
 
-
-        Rol rolAdmin = rolRepository.findByNombre("ADMIN")
+        Rol rolVendedor = rolRepository.findByNombre("VENDEDOR")
                 .orElseGet(() -> {
                     Rol nuevoRol = new Rol();
-                    nuevoRol.setNombre("ADMIN");
+                    nuevoRol.setNombre("VENDEDOR");
                     return rolRepository.save(nuevoRol);
                 });
-        usuario.setRoles(Set.of(rolAdmin));
+        usuario.setRoles(Set.of(rolVendedor));
 
         usuarioRepository.save(usuario);
-        return "Usuario registrado exitosamente";
+        return "Usuario registrado exitosamente con rol VENDEDOR";
     }
 
 
